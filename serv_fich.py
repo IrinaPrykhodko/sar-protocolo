@@ -4,6 +4,9 @@
 import socket, sys, os
 import szasar
 import signal
+import random
+import string
+import time
 
 PORT = 6012
 FILES_PATH = "files"
@@ -13,9 +16,6 @@ USERS = ["anonimous", "sar", "sza"]
 PASSWORDS = ["", "sar", "sza"]
 EMAILS = ["anonimous@gmail.com", "sar@gmail.com", "sza@gmail.com"]
 CODE_TIME = {}
-
-CODE_TIME
-
 
 class State:
     LoggedOut, LoggedIn = range(2)
@@ -33,22 +33,60 @@ def sendOK(s, address, params=""):
 def sendER(s, address, code=1):
     s.sendto(("ER{}".format(code)).encode("ascii"), address)
 
-def existsUser(user):
+
+def existsuser(user):
     for username in USERS:
         if username == user:
             return True
     return False
 
-def existsEmail(email):
+
+def existsemail(email):
     for emailaddress in EMAILS:
         if emailaddress == email:
             return True
     return False
 
-def registerUser(username, password, email):
+
+def registeruser(username, password, email):
     USERS.append(username)
     PASSWORDS.append(password)
     EMAILS.append(email)
+
+
+def checkpassword(username, password):
+    indexforthatuser = USERS.index(username)
+    if PASSWORDS[indexforthatuser] != password:
+        return False
+    else:
+        return True
+
+
+def generateandregistercodetime():
+    code = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
+    sparetime = "020"
+    codetime = code + "#" + sparetime
+    expirationtime = time.time() + sparetime
+
+    CODE_TIME[code] = expirationtime
+
+    return codetime
+
+
+def isvalidcode(code):
+    expirationtime = CODE_TIME[code]
+    currenttime = int(time.time())
+    if expirationtime < currenttime:
+        return False
+    else:
+        return True
+
+
+def checksentmessagelength(sentmessage):
+    if len(sentmessage) > 140:
+        return False
+    else:
+        return True
 
 
 def session(s, buffer, address):
@@ -66,15 +104,15 @@ def session(s, buffer, address):
 
             user, password, email = message.split("#")
 
-            if existsUser(user):
+            if existsuser(user):
                 sendER(s, 6, address)
                 continue
 
-            if existsEmail(email):
+            if existsemail(email):
                 sendER(s, 7, address)
                 continue
 
-            registerUser(user, password, email)
+            registeruser(user, password, email)
             sendOK(s, address)
         elif message.startswith(Command.Indentificate):
             if state != State.LoggedOut:
@@ -82,12 +120,31 @@ def session(s, buffer, address):
                 continue
 
             user, password = message.split("#")
-            if not checkPassword(user, password):
+            if not existsuser(user):
                 sendER(s, 8, address)
-            elif
-                code_time = generateandregistercodetime()  # "f6df5#003"
-                sendOK(s, address, code_time)
+            if not checkpassword(user, password):
+                sendER(s, 8, address)
+                continue
 
+            code_time = generateandregistercodetime()
+            state = State.LoggedIn
+            sendOK(s, address, code_time)
+        elif message.startswith(Command.Message):
+            if state != State.LoggedIn:
+                sendER(s, 11, address)
+                continue
+
+            code, user, sentmessage = message.split("#")
+            if not isvalidcode(code):
+                sendER(s, 5, address)
+                continue
+            if not existsuser(user):
+                sendER(s, 9, address)
+                continue
+
+            if not checksentmessagelength(sentmessage):
+                sendER(s, 10, address)
+                continue
 
 if __name__ == "__main__":
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
