@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 class Command:
-    User, Password, List, Download, Download2, Upload, Upload2, Delete, Exit = (
-    "USER", "PASS", "LIST", "DOWN", "DOW2", "UPLO", "UPL2", "DELE", "EXIT")
+    Register, Indentificate, Message, Read, Exit = (
+    "RG", "ID", "MS", "RD", "XT")
 
 
 def recvline(s, removeEOL=True):

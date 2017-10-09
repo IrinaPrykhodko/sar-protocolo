@@ -3,169 +3,103 @@
 
 import socket, sys, os
 import szasar
+import signal
 
 PORT = 6012
 FILES_PATH = "files"
 MAX_FILE_SIZE = 10 * 1 << 20  # 10 MiB
 SPACE_MARGIN = 50 * 1 << 20  # 50 MiB
-USERS = ("anonimous", "sar", "sza")
-PASSWORDS = ("", "sar", "sza")
+USERS = ["anonimous", "sar", "sza"]
+PASSWORDS = ["", "sar", "sza"]
+EMAILS = ["anonimous@gmail.com", "sar@gmail.com", "sza@gmail.com"]
+CODE_TIME = {}
+
+CODE_TIME
 
 
 class State:
-    Identification, Authentication, Main, Downloading, Uploading = range(5)
+    LoggedOut, LoggedIn = range(2)
 
 
-def sendOK(s, params=""):
-    s.sendall(("OK{}\r\n".format(params)).encode("ascii"))
+class Command:
+    Register, Indentificate, Message, Read, Exit = (
+        "RG", "ID", "MS", "RD", "XT")
 
 
-def sendER(s, code=1):
-    s.sendall(("ER{}\r\n".format(code)).encode("ascii"))
+def sendOK(s, address, params=""):
+    s.sendto(("OK{}".format(params)).encode("ascii"), address)
 
 
-def session(s):
-    state = State.Identification
+def sendER(s, address, code=1):
+    s.sendto(("ER{}".format(code)).encode("ascii"), address)
+
+def existsUser(user):
+    for username in USERS:
+        if username == user:
+            return True
+    return False
+
+def existsEmail(email):
+    for emailaddress in EMAILS:
+        if emailaddress == email:
+            return True
+    return False
+
+def registerUser(username, password, email):
+    USERS.append(username)
+    PASSWORDS.append(password)
+    EMAILS.append(email)
+
+
+def session(s, buffer, address):
+    state = State.LoggedOut
 
     while True:
-        message = szasar.recvline(dialog).decode("ascii")
+        message = buffer.decode("ascii")
         if not message:
             return
 
-        if message.startswith(szasar.Command.User):
-            if (state != State.Identification):
-                sendER(s)
+        if message.startswith(Command.Register):
+            if (state != State.LoggedOut):
+                sendER(s, 11, address)
                 continue
-            try:
-                user = USERS.index(message[4:])
-            except:
-                sendER(s, 2)
-            else:
-                sendOK(s)
-                state = State.Authentication
 
-        elif message.startswith(szasar.Command.Password):
-            if state != State.Authentication:
-                sendER(s)
-                continue
-            if (user == 0 or PASSWORDS[user] == message[4:]):
-                sendOK(s)
-                state = State.Main
-            else:
-                sendER(s, 3)
-                state = State.Identification
+            user, password, email = message.split("#")
 
-        elif message.startswith(szasar.Command.List):
-            if state != State.Main:
-                sendER(s)
+            if existsUser(user):
+                sendER(s, 6, address)
                 continue
-            try:
-                message = "OK\r\n"
-                for filename in os.listdir(FILES_PATH):
-                    filesize = os.path.getsize(os.path.join(FILES_PATH, filename))
-                    message += "{}?{}\r\n".format(filename, filesize)
-                message += "\r\n"
-            except:
-                sendER(s, 4)
-            else:
-                s.sendall(message.encode("ascii"))
 
-        elif message.startswith(szasar.Command.Download):
-            if state != State.Main:
-                sendER(s)
+            if existsEmail(email):
+                sendER(s, 7, address)
                 continue
-            filename = os.path.join(FILES_PATH, message[4:])
-            try:
-                filesize = os.path.getsize(filename)
-            except:
-                sendER(s, 5)
-                continue
-            else:
-                sendOK(s, filesize)
-                state = State.Downloading
 
-        elif message.startswith(szasar.Command.Download2):
-            if state != State.Downloading:
-                sendER(s)
+            registerUser(user, password, email)
+            sendOK(s, address)
+        elif message.startswith(Command.Indentificate):
+            if state != State.LoggedOut:
+                sendER(s, 11, address)
                 continue
-            state = State.Main
-            try:
-                with open(filename, "rb") as f:
-                    filedata = f.read()
-            except:
-                sendER(s, 6)
-            else:
-                sendOK(s)
-                s.sendall(filedata)
 
-        elif message.startswith(szasar.Command.Upload):
-            if state != State.Main:
-                sendER(s)
-                continue
-            if user == 0:
-                sendER(s, 7)
-                continue
-            filename, filesize = message[4:].split('?')
-            filesize = int(filesize)
-            if filesize > MAX_FILE_SIZE:
-                sendER(s, 8)
-                continue
-            svfs = os.statvfs(FILES_PATH)
-            if filesize + SPACE_MARGIN > svfs.f_bsize * svfs.f_bavail:
-                sendER(s, 9)
-                continue
-            sendOK(s)
-            state = State.Uploading
-
-        elif message.startswith(szasar.Command.Upload2):
-            if state != State.Uploading:
-                sendER(s)
-                continue
-            state = State.Main
-            try:
-                with open(os.path.join(FILES_PATH, filename), "wb") as f:
-                    filedata = szasar.recvall(s, filesize)
-                    f.write(filedata)
-            except:
-                sendER(s, 10)
-            else:
-                sendOK(s)
-
-        elif message.startswith(szasar.Command.Delete):
-            if state != State.Main:
-                sendER(s)
-                continue
-            if user == 0:
-                sendER(s, 7)
-                continue
-            try:
-                os.remove(os.path.join(FILES_PATH, message[4:]))
-            except:
-                sendER(s, 11)
-            else:
-                sendOK(s)
-
-        elif message.startswith(szasar.Command.Exit):
-            sendOK(s)
-            return
-
-        else:
-            sendER(s)
+            user, password = message.split("#")
+            if not checkPassword(user, password):
+                sendER(s, 8, address)
+            elif
+                code_time = generateandregistercodetime()  # "f6df5#003"
+                sendOK(s, address, code_time)
 
 
 if __name__ == "__main__":
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     s.bind(('', PORT))
-    s.listen(5)
+
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
     while True:
-        dialog, address = s.accept()
+        buffer, address = s.recvfrom(1024)
         print("Conexión aceptada del socket {0[0]}:{0[1]}.".format(address))
-        if (os.fork()):
-            dialog.close()
-        else:
-            s.close()
-            session(dialog)
-            dialog.close()
-            exit(0)
+
+        if not os.fork():
+            if buffer:
+                session(s, buffer, address)
