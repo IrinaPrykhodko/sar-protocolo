@@ -16,8 +16,7 @@ class Command:
     Register, Indentificate, Message, Read, Exit = (
         "RG", "ID", "MS", "RD", "XT")
 
-#PORT = 6012
-PORT = 6017
+PORT = 6012
 FILES_PATH = "files"
 MAX_FILE_SIZE = 10 * 1 << 20  # 10 MiB
 SPACE_MARGIN = 50 * 1 << 20  # 50 MiB
@@ -30,56 +29,55 @@ loggedUsername = ""
 currentstate = State.LoggedOut
 
 def sendOK(s, address, params=""):
-    print("send ok")
+    print("Sending OK...")
     s.sendto(("OK{}".format(params)).encode("ascii"), address)
 
 def sendER(s, address, code=1):
-    print("send er", code)
+    print("Sending ER...", code)
     s.sendto(("ER{}".format(code)).encode("ascii"), address)
 
 def existsuser(user):
+    print("Checking if user", user, "exists...")
     for username in USERS:
         if username == user:
-            print("exitst user")
+            print(user, "exists")
             return True
-    print("not exists user")
+    print(user, "not exists")
     return False
 
 def existsemail(email):
+    print("Checking email", email, "existst...")
     for emailaddress in EMAILS:
         if emailaddress == email:
-            print("exists email")
+            print(email, "exists")
             return True
-    print("not exists email")
+    print(email, "don't exists")
     return False
 
 def registeruser(username, password, email):
-    print("registering user with username", username, "and password", password)
+    print("Registering user", username, "with password", password, "...")
     USERS.append(username)
     PASSWORDS.append(password)
     EMAILS.append(email)
 
 def checkpassword(username, password):
-    print("checking username", username, "and password", password)
+    print("Checking password for user", username)
     print(USERS)
     print(PASSWORDS)
     print(EMAILS)
     indexforthatuser = USERS.index(username)
-    print("Comparando...")
-    print("*" + PASSWORDS[indexforthatuser] + "*")
-    print("con...")
-    print("*" + password + "*")
+
     if PASSWORDS[indexforthatuser] == password:
-        print("password ok")
+        print("Password matchs")
         return True
     else:
-        print("password wrong")
+        print("Password don't match")
         return False
 
 def generateandregistercodetime():
-    print("generating and registering code-time")
+    print("Generating and registering a random code")
     code = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
-    sparetime = 20.0
+    sparetime = 2000.0
     codetime = code + "#" + str(sparetime).split(".")[0]
     expirationtime = time.time() + sparetime
 
@@ -87,11 +85,14 @@ def generateandregistercodetime():
 
     return codetime
 
-def isvalidcode(code):
+def isvalidcode(code):  # check code and time
     if not code:
         sendER(s, address, 2)
         return
-    
+
+    if not code in list(CODE_TIME.keys()):
+        return False
+
     expirationtime = CODE_TIME[code]
     currenttime = int(time.time())
     if expirationtime < currenttime:
@@ -101,16 +102,21 @@ def isvalidcode(code):
         print("is valid code")
         return True
 
+def issamecode(code):  # check only code, not time
+    if not code:
+        sendER(s, address, 2)
+        return
+
 def checksentmessagelength(sentmessage):
     if len(sentmessage) > 140:
-        print("message length wrong")
+        print("Wrong message length")
         return False
     else:
         print("message length ok")
         return True
 
 def sendMessage(sender, receiver, message):
-    print("sending message")
+    print("sending message", message)
     if receiver in MESSAGES:
         MESSAGES[receiver].append((sender, message))
     else:
@@ -139,8 +145,10 @@ def session(s, buffer, address):
         splitedParameters = params.split("#")
         if len(splitedParameters) > 3:
             sendER(s, address, 2)
+            return
         elif len(splitedParameters) < 3:
             sendER(s, address, 3)
+            return
 
         user, password, email = splitedParameters
 
@@ -164,12 +172,15 @@ def session(s, buffer, address):
         splitedParameters = params.split("#")
         if len(splitedParameters) > 2:
             sendER(s, address, 2)
+            return
         elif len(splitedParameters) < 2:
             sendER(s, address, 3)
+            return
 
         user, password = splitedParameters
         if not existsuser(user):
             sendER(s, address, 8)
+            return
 
         if not checkpassword(user, password):
             sendER(s, address, 8)
@@ -189,11 +200,13 @@ def session(s, buffer, address):
             sendER(s, address, 1)
             return
 
-            splitedParameters = params.split("#")
-            if len(splitedParameters) > 3:
-                sendER(s, address, 2)
-            elif len(splitedParameters) < 3:
-                sendER(s, address, 3)
+        splitedParameters = params.split("#")
+        if len(splitedParameters) > 3:
+            sendER(s, address, 2)
+            return
+        elif len(splitedParameters) < 3:
+            sendER(s, address, 3)
+            return
 
         code, user, sentmessage = splitedParameters
         if not isvalidcode(code):
@@ -207,9 +220,9 @@ def session(s, buffer, address):
             sendER(s, address, 10)
             return
 
-            sendMessage(loggedUsername, user, sentmessage)
-            sendOK(s, address)
-            return
+        sendMessage(loggedUsername, user, sentmessage)
+        sendOK(s, address)
+        return
 
     elif message.startswith(Command.Read):
         print("Recibida petición de lectura de mensajes")
@@ -221,19 +234,25 @@ def session(s, buffer, address):
         splitedParameters = params.split("#")
         if len(splitedParameters) > 1:
             sendER(s, address, 2)
+            return
         elif len(splitedParameters) < 1:
             sendER(s, address, 3)
+            return
 
         code = params
         if not isvalidcode(code):
             sendER(s, address, 5)
             return
 
-        messageQuantity = len(MESSAGES[loggedUsername])
-        sendOK(s, address, messageQuantity)
-        if MESSAGES[loggedUsername]:
-            for item in MESSAGES[loggedUsername]:
-                s.sendto(item[0] + "#" + item[1], address)
+        if loggedUsername in list(MESSAGES.keys()):
+            messageQuantity = len(MESSAGES[loggedUsername])
+            sendOK(s, address, messageQuantity)
+            if MESSAGES[loggedUsername]:
+                for item in MESSAGES[loggedUsername]:
+                    s.sendto((item[0] + "#" + item[1]).encode(), address)
+        else:
+            messageQuantity = 0
+            sendOK(s, address, messageQuantity)
 
     elif message.startswith(Command.Exit):
         print("Recibida petición de cierre de sesión")
@@ -245,8 +264,10 @@ def session(s, buffer, address):
         splitedParameters = params.split("#")
         if len(splitedParameters) > 1:
             sendER(s, address, 2)
+            return
         elif len(splitedParameters) < 1:
             sendER(s, address, 3)
+            return
 
         code = params
         if not isvalidcode(code):
@@ -260,7 +281,7 @@ def session(s, buffer, address):
     else:
         print("Recibida una orden desconocida")
         sendER(s, address, 1)
-
+        return
 
 if __name__ == "__main__":
     print('Starting...')
